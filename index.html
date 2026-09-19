@@ -11,12 +11,14 @@
     margin: 0; min-height: 100vh; font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif;
     background: linear-gradient(160deg, #1a1a2e, #16213e); color: #fff; padding: 20px;
   }
+  .wrap { max-width: 460px; margin: 0 auto; }
   .card {
-    width: 100%; max-width: 460px; margin: 20px auto; background: rgba(255,255,255,0.06);
+    width: 100%; margin: 16px 0; background: rgba(255,255,255,0.06);
     border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 24px;
     backdrop-filter: blur(10px);
   }
   h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 0 0 10px; color: #ddd; }
   p.sub { color: #aaa; margin: 0 0 20px; font-size: 14px; }
   label { display: block; font-size: 13px; color: #ccc; margin: 14px 0 6px; }
   input {
@@ -36,9 +38,10 @@
   #results { margin-top: 18px; display: flex; flex-direction: column; gap: 10px; }
   .result {
     display: flex; gap: 12px; align-items: center; background: rgba(255,255,255,0.05);
-    border-radius: 12px; padding: 10px; cursor: pointer; border: 1px solid transparent;
+    border-radius: 12px; padding: 10px; cursor: pointer; border: 2px solid transparent;
   }
-  .result:active, .result:hover { border-color: #6c5ce7; }
+  .result:hover { border-color: rgba(108,92,231,0.5); }
+  .result.selected { border-color: #6c5ce7; background: rgba(108,92,231,0.15); }
   .result img { width: 64px; height: 48px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
   .result .info { min-width: 0; }
   .result .info .t { font-size: 14px; font-weight: 600; line-height: 1.3;
@@ -46,9 +49,30 @@
   .result .info .c { font-size: 12px; color: #aaa; margin-top: 3px; }
   .hidden { display: none; }
   .loading { text-align: center; color: #aaa; padding: 16px; font-size: 14px; }
+  #confirmBtn {
+    width: 100%; margin-top: 16px; padding: 15px; border: none; border-radius: 12px;
+    background: #2ed573; color: #0b1a12; font-size: 16px; font-weight: 700; cursor: pointer;
+  }
+  #confirmBtn:disabled { opacity: 0.4; cursor: default; }
+  .queue-item {
+    display: flex; justify-content: space-between; align-items: center;
+    background: rgba(255,255,255,0.05); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; font-size: 13px;
+  }
+  .queue-item .t { font-weight: 600; }
+  .queue-item .n { color: #aaa; }
+  .badge { font-size: 10px; padding: 2px 7px; border-radius: 20px; }
+  .badge.playing { background: rgba(46,213,115,0.2); color: #2ed573; }
+  .badge.waiting { background: rgba(255,255,255,0.1); color: #ccc; }
 </style>
 </head>
 <body>
+<div class="wrap">
+
+  <div class="card">
+    <h2>🎶 Cola actual</h2>
+    <div id="queueList"><div class="loading">Cargando...</div></div>
+  </div>
+
   <div class="card">
     <h1>🎵 Pide tu canción</h1>
     <p class="sub">Pon tu nombre, busca la canción y elígela de la lista</p>
@@ -64,12 +88,17 @@
 
     <div id="loading" class="loading hidden">Buscando...</div>
     <div id="results"></div>
+    <button id="confirmBtn" disabled>Seleccionar música</button>
     <div id="msg"></div>
   </div>
 
+</div>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import {
+  getFirestore, collection, addDoc, query, where, orderBy, onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import { firebaseConfig, YOUTUBE_API_KEY } from "./firebase-config.js";
 import { searchVideos } from "./shared.js";
 
@@ -81,10 +110,38 @@ const qInput = document.getElementById("q");
 const searchBtn = document.getElementById("searchBtn");
 const loadingEl = document.getElementById("loading");
 const resultsEl = document.getElementById("results");
+const confirmBtn = document.getElementById("confirmBtn");
 const msg = document.getElementById("msg");
+const queueListEl = document.getElementById("queueList");
 
 nameInput.value = localStorage.getItem("jukebox_name") || "";
 
+let selected = null; // { videoId, title }
+
+// --- Cola en tiempo real ---
+const q2 = query(
+  collection(db, "queue"),
+  where("status", "in", ["waiting", "playing"]),
+  orderBy("order", "asc")
+);
+onSnapshot(q2, (snap) => {
+  const items = snap.docs.map(d => d.data());
+  if (items.length === 0) {
+    queueListEl.innerHTML = '<div class="loading">La cola está vacía, ¡sé el primero!</div>';
+    return;
+  }
+  queueListEl.innerHTML = items.map(it => `
+    <div class="queue-item">
+      <div>
+        <div class="t">${escapeHtml(it.title)}</div>
+        <div class="n">Pedida por ${escapeHtml(it.name)}</div>
+      </div>
+      <span class="badge ${it.status}">${it.status === "playing" ? "Sonando" : "En espera"}</span>
+    </div>
+  `).join("");
+});
+
+// --- Búsqueda ---
 qInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(); });
 searchBtn.addEventListener("click", doSearch);
 
@@ -99,6 +156,8 @@ async function doSearch() {
   if (!text) return;
 
   resultsEl.innerHTML = "";
+  selected = null;
+  confirmBtn.disabled = true;
   loadingEl.classList.remove("hidden");
   searchBtn.disabled = true;
 
@@ -130,27 +189,43 @@ function renderResults(items) {
   `).join("");
 
   resultsEl.querySelectorAll(".result").forEach(el => {
-    el.addEventListener("click", () => addToQueue(el.dataset.id, el.dataset.title));
+    el.addEventListener("click", () => {
+      resultsEl.querySelectorAll(".result").forEach(r => r.classList.remove("selected"));
+      el.classList.add("selected");
+      selected = { videoId: el.dataset.id, title: el.dataset.title };
+      confirmBtn.disabled = false;
+    });
   });
 }
 
-async function addToQueue(videoId, title) {
+confirmBtn.addEventListener("click", async () => {
+  if (!selected) return;
   const name = nameInput.value.trim();
-  if (!name) return;
+  if (!name) {
+    msg.innerHTML = '<div class="msg err">Escribe tu nombre primero</div>';
+    return;
+  }
+
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = "Añadiendo...";
 
   try {
     localStorage.setItem("jukebox_name", name);
     await addDoc(collection(db, "queue"), {
-      name, videoId, title, status: "waiting", order: Date.now(),
+      name, videoId: selected.videoId, title: selected.title, status: "waiting", order: Date.now(),
     });
     msg.innerHTML = '<div class="msg ok">¡Añadida a la cola! 🎉</div>';
     resultsEl.innerHTML = "";
     qInput.value = "";
+    selected = null;
   } catch (e) {
     console.error(e);
     msg.innerHTML = '<div class="msg err">Error al añadir la canción. Intenta de nuevo.</div>';
+  } finally {
+    confirmBtn.textContent = "Seleccionar música";
+    confirmBtn.disabled = true;
   }
-}
+});
 
 function escapeHtml(s) {
   return String(s || "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));

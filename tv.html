@@ -36,9 +36,39 @@
     position: fixed; bottom: 16px; background: rgba(255,255,255,0.95); padding: 8px; border-radius: 10px; z-index: 20;
   }
   .qr-corner.left { left: 16px; }
-  .qr-corner.right { right: 16px; }
   .qr-corner img { display: block; }
   .qr-corner p { text-align: center; color: #000; font-size: 11px; margin: 4px 0 0; font-weight: 600; }
+
+  /* --- Banner promocional + QR (esquina derecha) --- */
+  #promo-card {
+    position: fixed; bottom: 16px; right: 16px; z-index: 20;
+    display: flex; align-items: stretch; border-radius: 18px; overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 3px solid #ffd166;
+  }
+  #promo-card .qr-part {
+    background: #fff; padding: 10px; display: flex; align-items: center; justify-content: center;
+  }
+  #promo-card .text-part {
+    position: relative; overflow: hidden; padding: 14px 22px;
+    background: linear-gradient(135deg, #8a0000 0%, #d2001f 45%, #ff7a00 100%);
+    display: flex; flex-direction: column; justify-content: center; min-width: 220px;
+  }
+  #promo-card .text-part .emoji-bg {
+    position: absolute; inset: 0; font-size: 46px; opacity: 0.16;
+    display: flex; flex-wrap: wrap; align-content: center; justify-content: space-around;
+    transform: rotate(-8deg); pointer-events: none; line-height: 1;
+  }
+  #promo-card .brand {
+    position: relative; font-size: 13px; font-weight: 800; letter-spacing: 0.08em;
+    color: #ffd166; text-transform: uppercase; margin-bottom: 4px;
+  }
+  #promo-card .headline {
+    position: relative; font-size: 22px; font-weight: 900; color: #fff; line-height: 1.15;
+    text-transform: uppercase; text-shadow: 0 2px 4px rgba(0,0,0,0.4);
+  }
+  #promo-card .subline {
+    position: relative; font-size: 12px; color: #ffe8c2; margin-top: 6px; font-weight: 600;
+  }
 
   #fallback-banner {
     position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
@@ -69,9 +99,17 @@
     <img id="qr-small-left" width="90" height="90" alt="QR">
     <p>Pide tu canción</p>
   </div>
-  <div id="qr-right" class="qr-corner hidden">
-    <img id="qr-small-right" width="90" height="90" alt="QR">
-    <p>Pide tu canción</p>
+
+  <div id="promo-card" class="hidden">
+    <div class="qr-part">
+      <img id="qr-small-right" width="90" height="90" alt="QR">
+    </div>
+    <div class="text-part">
+      <div class="emoji-bg">🍗🍔🍟🍗🍔🍟🍗🍔</div>
+      <div class="brand">El Pechugón</div>
+      <div class="headline">¡ESCOGE TU MÚSICA!</div>
+      <div class="subline">Escanea el QR y pide tu canción 🎶</div>
+    </div>
   </div>
 
 <script>
@@ -99,7 +137,7 @@ const idleEl = document.getElementById("idle");
 const playerWrap = document.getElementById("player-wrap");
 const sidebar = document.getElementById("sidebar");
 const qrLeft = document.getElementById("qr-left");
-const qrRight = document.getElementById("qr-right");
+const promoCard = document.getElementById("promo-card");
 const fallbackBanner = document.getElementById("fallback-banner");
 const queueListEl = document.getElementById("queue-list");
 
@@ -139,7 +177,7 @@ function showRealScreen() {
   playerWrap.classList.remove("hidden");
   sidebar.classList.remove("hidden");
   qrLeft.classList.remove("hidden");
-  qrRight.classList.remove("hidden");
+  promoCard.classList.remove("hidden");
   fallbackBanner.classList.add("hidden");
 }
 
@@ -148,17 +186,17 @@ function showFallbackScreen() {
   playerWrap.classList.remove("hidden");
   sidebar.classList.remove("hidden");
   qrLeft.classList.remove("hidden");
-  qrRight.classList.remove("hidden");
+  promoCard.classList.remove("hidden");
   fallbackBanner.classList.remove("hidden");
 }
 
 function showEmptyIdle() {
-  // Solo se usa si no hay playlist de fondo configurada
+  // Solo se usa si aún no cargó la lista de tendencias
   idleEl.classList.remove("hidden");
   playerWrap.classList.add("hidden");
   sidebar.classList.add("hidden");
   qrLeft.classList.add("hidden");
-  qrRight.classList.add("hidden");
+  promoCard.classList.add("hidden");
   fallbackBanner.classList.add("hidden");
 }
 

@@ -50,3 +50,20 @@ export async function searchVideos(apiKey, queryText) {
     thumbnail: item.snippet.thumbnails?.default?.url || `https://img.youtube.com/vi/${item.id.videoId}/default.jpg`,
   }));
 }
+
+// Trae los videos musicales más populares del momento (tendencias), para usar como
+// música de fondo cuando nadie ha pedido nada. regionCode: "PE" = Perú.
+export async function getTrendingMusic(apiKey, regionCode = "PE") {
+  const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&videoCategoryId=10&maxResults=50&regionCode=${regionCode}&key=${apiKey}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const errData = await res.json().catch(() => null);
+    throw new Error(errData?.error?.message || "Error al obtener tendencias de YouTube");
+  }
+  const data = await res.json();
+  return (data.items || []).map(item => ({
+    videoId: item.id,
+    title: item.snippet.title,
+    channel: item.snippet.channelTitle,
+  }));
+}

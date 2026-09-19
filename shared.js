@@ -33,3 +33,20 @@ export async function getVideoTitle(videoId) {
     return null;
   }
 }
+
+// Busca videos en YouTube usando la YouTube Data API v3
+export async function searchVideos(apiKey, queryText) {
+  const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=8&q=${encodeURIComponent(queryText)}&key=${apiKey}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const errData = await res.json().catch(() => null);
+    throw new Error(errData?.error?.message || "Error al buscar en YouTube");
+  }
+  const data = await res.json();
+  return (data.items || []).map(item => ({
+    videoId: item.id.videoId,
+    title: item.snippet.title,
+    channel: item.snippet.channelTitle,
+    thumbnail: item.snippet.thumbnails?.default?.url || `https://img.youtube.com/vi/${item.id.videoId}/default.jpg`,
+  }));
+}

@@ -8,135 +8,156 @@
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
   body {
-    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif;
+    margin: 0; min-height: 100vh; font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif;
     background: linear-gradient(160deg, #1a1a2e, #16213e); color: #fff; padding: 20px;
   }
   .card {
-    width: 100%; max-width: 420px; background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 28px;
+    width: 100%; max-width: 460px; margin: 20px auto; background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 24px;
     backdrop-filter: blur(10px);
   }
   h1 { font-size: 22px; margin: 0 0 4px; }
-  p.sub { color: #aaa; margin: 0 0 24px; font-size: 14px; }
-  label { display: block; font-size: 13px; color: #ccc; margin: 16px 0 6px; }
+  p.sub { color: #aaa; margin: 0 0 20px; font-size: 14px; }
+  label { display: block; font-size: 13px; color: #ccc; margin: 14px 0 6px; }
   input {
     width: 100%; padding: 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);
     background: rgba(0,0,0,0.25); color: #fff; font-size: 16px;
   }
   input:focus { outline: 2px solid #6c5ce7; }
-  button {
-    width: 100%; margin-top: 22px; padding: 15px; border: none; border-radius: 12px;
-    background: #6c5ce7; color: #fff; font-size: 16px; font-weight: 600; cursor: pointer;
+  .search-row { display: flex; gap: 8px; }
+  .search-row input { flex: 1; }
+  .search-row button {
+    padding: 0 18px; border: none; border-radius: 12px; background: #6c5ce7; color: #fff;
+    font-size: 15px; font-weight: 600; cursor: pointer;
   }
-  button:disabled { opacity: 0.5; }
   .msg { margin-top: 16px; padding: 12px; border-radius: 10px; font-size: 14px; text-align: center; }
   .msg.ok { background: rgba(46, 213, 115, 0.15); color: #2ed573; }
   .msg.err { background: rgba(255, 71, 87, 0.15); color: #ff4757; }
-  .preview { margin-top: 14px; display: flex; gap: 10px; align-items: center; }
-  .preview img { width: 80px; border-radius: 8px; }
-  .preview .t { font-size: 13px; color: #ddd; }
+  #results { margin-top: 18px; display: flex; flex-direction: column; gap: 10px; }
+  .result {
+    display: flex; gap: 12px; align-items: center; background: rgba(255,255,255,0.05);
+    border-radius: 12px; padding: 10px; cursor: pointer; border: 1px solid transparent;
+  }
+  .result:active, .result:hover { border-color: #6c5ce7; }
+  .result img { width: 64px; height: 48px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
+  .result .info { min-width: 0; }
+  .result .info .t { font-size: 14px; font-weight: 600; line-height: 1.3;
+    overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .result .info .c { font-size: 12px; color: #aaa; margin-top: 3px; }
   .hidden { display: none; }
+  .loading { text-align: center; color: #aaa; padding: 16px; font-size: 14px; }
 </style>
 </head>
 <body>
   <div class="card">
     <h1>🎵 Pide tu canción</h1>
-    <p class="sub">Pon tu nombre y pega el link de YouTube</p>
+    <p class="sub">Pon tu nombre, busca la canción y elígela de la lista</p>
 
     <label for="name">Tu nombre</label>
     <input id="name" type="text" placeholder="Ej: Marta" maxlength="30">
 
-    <label for="link">Link de YouTube</label>
-    <input id="link" type="text" placeholder="https://www.youtube.com/watch?v=...">
-
-    <div id="preview" class="preview hidden">
-      <img id="thumb" src="" alt="">
-      <div class="t" id="title"></div>
+    <label for="q">Buscar canción</label>
+    <div class="search-row">
+      <input id="q" type="text" placeholder="Nombre de la canción o artista">
+      <button id="searchBtn">Buscar</button>
     </div>
 
-    <button id="submit">Añadir a la cola</button>
+    <div id="loading" class="loading hidden">Buscando...</div>
+    <div id="results"></div>
     <div id="msg"></div>
   </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js";
-import { extractVideoId, getVideoTitle } from "./shared.js";
+import { firebaseConfig, YOUTUBE_API_KEY } from "./firebase-config.js";
+import { searchVideos } from "./shared.js";
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 const nameInput = document.getElementById("name");
-const linkInput = document.getElementById("link");
-const submitBtn = document.getElementById("submit");
+const qInput = document.getElementById("q");
+const searchBtn = document.getElementById("searchBtn");
+const loadingEl = document.getElementById("loading");
+const resultsEl = document.getElementById("results");
 const msg = document.getElementById("msg");
-const preview = document.getElementById("preview");
-const thumb = document.getElementById("thumb");
-const titleEl = document.getElementById("title");
 
-// Recuerda el nombre en este dispositivo
 nameInput.value = localStorage.getItem("jukebox_name") || "";
 
-let currentVideoId = null;
-let debounceTimer = null;
+qInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(); });
+searchBtn.addEventListener("click", doSearch);
 
-linkInput.addEventListener("input", () => {
-  clearTimeout(debounceTimer);
-  preview.classList.add("hidden");
-  currentVideoId = null;
-  debounceTimer = setTimeout(async () => {
-    const id = extractVideoId(linkInput.value);
-    if (!id) return;
-    currentVideoId = id;
-    thumb.src = `https://img.youtube.com/vi/${id}/mqdefault.jpg`;
-    const title = await getVideoTitle(id);
-    titleEl.textContent = title || "Video de YouTube";
-    preview.classList.remove("hidden");
-  }, 400);
-});
-
-submitBtn.addEventListener("click", async () => {
+async function doSearch() {
   const name = nameInput.value.trim();
-  const link = linkInput.value.trim();
   msg.innerHTML = "";
-
   if (!name) {
-    msg.innerHTML = '<div class="msg err">Escribe tu nombre</div>';
+    msg.innerHTML = '<div class="msg err">Escribe tu nombre primero</div>';
     return;
   }
-  const videoId = currentVideoId || extractVideoId(link);
-  if (!videoId) {
-    msg.innerHTML = '<div class="msg err">Ese link de YouTube no es válido</div>';
-    return;
-  }
+  const text = qInput.value.trim();
+  if (!text) return;
 
-  submitBtn.disabled = true;
-  submitBtn.textContent = "Añadiendo...";
+  resultsEl.innerHTML = "";
+  loadingEl.classList.remove("hidden");
+  searchBtn.disabled = true;
+
+  try {
+    const items = await searchVideos(YOUTUBE_API_KEY, text);
+    renderResults(items);
+  } catch (e) {
+    console.error(e);
+    msg.innerHTML = `<div class="msg err">No se pudo buscar: ${e.message}</div>`;
+  } finally {
+    loadingEl.classList.add("hidden");
+    searchBtn.disabled = false;
+  }
+}
+
+function renderResults(items) {
+  if (items.length === 0) {
+    resultsEl.innerHTML = '<div class="loading">No se encontraron resultados</div>';
+    return;
+  }
+  resultsEl.innerHTML = items.map(it => `
+    <div class="result" data-id="${it.videoId}" data-title="${escapeAttr(it.title)}">
+      <img src="${it.thumbnail}" alt="">
+      <div class="info">
+        <div class="t">${escapeHtml(it.title)}</div>
+        <div class="c">${escapeHtml(it.channel)}</div>
+      </div>
+    </div>
+  `).join("");
+
+  resultsEl.querySelectorAll(".result").forEach(el => {
+    el.addEventListener("click", () => addToQueue(el.dataset.id, el.dataset.title));
+  });
+}
+
+async function addToQueue(videoId, title) {
+  const name = nameInput.value.trim();
+  if (!name) return;
 
   try {
     localStorage.setItem("jukebox_name", name);
-    const title = titleEl.textContent || "Video de YouTube";
     await addDoc(collection(db, "queue"), {
-      name,
-      videoId,
-      title,
-      status: "waiting",
-      order: Date.now(),
+      name, videoId, title, status: "waiting", order: Date.now(),
     });
     msg.innerHTML = '<div class="msg ok">¡Añadida a la cola! 🎉</div>';
-    linkInput.value = "";
-    preview.classList.add("hidden");
-    currentVideoId = null;
+    resultsEl.innerHTML = "";
+    qInput.value = "";
   } catch (e) {
     console.error(e);
     msg.innerHTML = '<div class="msg err">Error al añadir la canción. Intenta de nuevo.</div>';
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = "Añadir a la cola";
   }
-});
+}
+
+function escapeHtml(s) {
+  return String(s || "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+function escapeAttr(s) {
+  return escapeHtml(s).replace(/"/g, "&quot;");
+}
 </script>
 </body>
 </html>

@@ -16,3 +16,6 @@ export const firebaseConfig = {
 
 // PIN de administrador (para admin.html). Cámbialo por el que quieras.
 export const ADMIN_PIN = "2468";
+
+// Clave de YouTube Data API v3 (para buscar videos desde index.html)
+export const YOUTUBE_API_KEY = "AIzaSyB9AA12U0lwqbrhPo0asv29696tKo3GmwU";

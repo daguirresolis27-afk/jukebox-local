@@ -55,8 +55,11 @@
   <div class="card">
     <label style="font-size:13px; color:#ccc;">Añadir canción manualmente</label>
     <input id="manualName" placeholder="Nombre (ej: Admin)">
-    <input id="manualLink" placeholder="Link de YouTube">
-    <button id="manualAdd" style="width:100%; margin-top:12px;">Añadir</button>
+    <div style="display:flex; gap:8px; margin-top:10px;">
+      <input id="manualQuery" placeholder="Buscar canción" style="flex:1; margin-top:0;">
+      <button id="manualSearch">Buscar</button>
+    </div>
+    <div id="manualResults" style="margin-top:10px; display:flex; flex-direction:column; gap:8px;"></div>
   </div>
 
   <div id="list"></div>
@@ -68,8 +71,8 @@ import {
   getFirestore, collection, query, orderBy, onSnapshot,
   doc, deleteDoc, updateDoc, addDoc, where
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
-import { firebaseConfig, ADMIN_PIN } from "./firebase-config.js";
-import { extractVideoId, getVideoTitle } from "./shared.js";
+import { firebaseConfig, ADMIN_PIN, YOUTUBE_API_KEY } from "./firebase-config.js";
+import { searchVideos } from "./shared.js";
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -143,17 +146,37 @@ function renderList(items) {
   });
 }
 
-document.getElementById("manualAdd").addEventListener("click", async () => {
-  const name = document.getElementById("manualName").value.trim() || "Admin";
-  const link = document.getElementById("manualLink").value.trim();
-  const videoId = extractVideoId(link);
-  if (!videoId) { alert("Link de YouTube no válido"); return; }
-  const title = (await getVideoTitle(videoId)) || "Video de YouTube";
-  await addDoc(collection(db, "queue"), {
-    name, videoId, title, status: "waiting", order: Date.now(),
-  });
-  document.getElementById("manualLink").value = "";
+document.getElementById("manualSearch").addEventListener("click", doManualSearch);
+document.getElementById("manualQuery").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") doManualSearch();
 });
+
+async function doManualSearch() {
+  const text = document.getElementById("manualQuery").value.trim();
+  const box = document.getElementById("manualResults");
+  if (!text) return;
+  box.innerHTML = '<div style="color:#aaa; font-size:13px;">Buscando...</div>';
+  try {
+    const items = await searchVideos(YOUTUBE_API_KEY, text);
+    box.innerHTML = items.map(it => `
+      <div class="queue-item" data-id="${it.videoId}" data-title="${escapeHtml(it.title)}" style="cursor:pointer;">
+        <div class="info"><b>${escapeHtml(it.title)}</b><span>${escapeHtml(it.channel)}</span></div>
+      </div>
+    `).join("") || '<div style="color:#aaa; font-size:13px;">Sin resultados</div>';
+    box.querySelectorAll("[data-id]").forEach(el => {
+      el.addEventListener("click", async () => {
+        const name = document.getElementById("manualName").value.trim() || "Admin";
+        await addDoc(collection(db, "queue"), {
+          name, videoId: el.dataset.id, title: el.dataset.title, status: "waiting", order: Date.now(),
+        });
+        box.innerHTML = "";
+        document.getElementById("manualQuery").value = "";
+      });
+    });
+  } catch (e) {
+    box.innerHTML = `<div style="color:#ff4757; font-size:13px;">${escapeHtml(e.message)}</div>`;
+  }
+}
 
 function escapeHtml(s) {
   return String(s || "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));

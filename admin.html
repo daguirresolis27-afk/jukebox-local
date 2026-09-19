@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin - Cola de música</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif;
+    background: #16213e; color: #fff; padding: 20px;
+  }
+  h1 { font-size: 20px; }
+  .card {
+    max-width: 480px; margin: 40px auto; background: rgba(255,255,255,0.06);
+    border-radius: 16px; padding: 24px;
+  }
+  input {
+    width: 100%; padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(0,0,0,0.25); color: #fff; font-size: 16px; margin-top: 10px;
+  }
+  button {
+    padding: 12px 16px; border: none; border-radius: 10px; background: #6c5ce7; color: #fff;
+    font-weight: 600; cursor: pointer; font-size: 14px;
+  }
+  button.secondary { background: rgba(255,255,255,0.12); }
+  button.danger { background: #ff4757; }
+  .row { display: flex; gap: 8px; margin-top: 10px; }
+  .queue-item {
+    display: flex; justify-content: space-between; align-items: center;
+    background: rgba(255,255,255,0.05); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
+  }
+  .queue-item .info b { display: block; }
+  .queue-item .info span { color: #aaa; font-size: 13px; }
+  .badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; margin-left: 8px; }
+  .badge.playing { background: rgba(46,213,115,0.2); color: #2ed573; }
+  .badge.waiting { background: rgba(255,255,255,0.1); color: #ccc; }
+  #app { display: none; max-width: 600px; margin: 0 auto; }
+  #login { max-width: 340px; margin: 60px auto; text-align: center; }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <h1>🔒 Panel de administrador</h1>
+  <input id="pin" type="password" placeholder="PIN" inputmode="numeric">
+  <button id="loginBtn" style="width:100%; margin-top:14px;">Entrar</button>
+  <p id="loginError" style="color:#ff4757; font-size:13px;"></p>
+</div>
+
+<div id="app">
+  <h1>🎛️ Administrar cola</h1>
+
+  <div class="card">
+    <label style="font-size:13px; color:#ccc;">Añadir canción manualmente</label>
+    <input id="manualName" placeholder="Nombre (ej: Admin)">
+    <input id="manualLink" placeholder="Link de YouTube">
+    <button id="manualAdd" style="width:100%; margin-top:12px;">Añadir</button>
+  </div>
+
+  <div id="list"></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getFirestore, collection, query, orderBy, onSnapshot,
+  doc, deleteDoc, updateDoc, addDoc, where
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { firebaseConfig, ADMIN_PIN } from "./firebase-config.js";
+import { extractVideoId, getVideoTitle } from "./shared.js";
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const loginEl = document.getElementById("login");
+const appEl = document.getElementById("app");
+const pinInput = document.getElementById("pin");
+const loginError = document.getElementById("loginError");
+
+document.getElementById("loginBtn").addEventListener("click", () => {
+  if (pinInput.value === ADMIN_PIN) {
+    sessionStorage.setItem("jukebox_admin", "1");
+    startApp();
+  } else {
+    loginError.textContent = "PIN incorrecto";
+  }
+});
+pinInput.addEventListener("keydown", (e) => { if (e.key === "Enter") document.getElementById("loginBtn").click(); });
+
+if (sessionStorage.getItem("jukebox_admin") === "1") startApp();
+
+function startApp() {
+  loginEl.style.display = "none";
+  appEl.style.display = "block";
+  listenQueue();
+}
+
+function listenQueue() {
+  const q = query(
+    collection(db, "queue"),
+    where("status", "in", ["waiting", "playing"]),
+    orderBy("order", "asc")
+  );
+  onSnapshot(q, (snap) => {
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderList(items);
+  });
+}
+
+function renderList(items) {
+  const listEl = document.getElementById("list");
+  if (items.length === 0) {
+    listEl.innerHTML = '<p style="color:#aaa;">La cola está vacía</p>';
+    return;
+  }
+  listEl.innerHTML = items.map(it => `
+    <div class="queue-item">
+      <div class="info">
+        <b>${escapeHtml(it.title || it.videoId)}
+          <span class="badge ${it.status}">${it.status === "playing" ? "Sonando" : "En espera"}</span>
+        </b>
+        <span>Pedida por ${escapeHtml(it.name)}</span>
+      </div>
+      <div class="row">
+        ${it.status !== "playing" ? `<button class="secondary" data-play="${it.id}">▶</button>` : ""}
+        <button class="danger" data-remove="${it.id}">✕</button>
+      </div>
+    </div>
+  `).join("");
+
+  listEl.querySelectorAll("[data-remove]").forEach(btn => {
+    btn.addEventListener("click", () => deleteDoc(doc(db, "queue", btn.dataset.remove)));
+  });
+  listEl.querySelectorAll("[data-play]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      // Pone en espera lo que estaba sonando, y fuerza este a sonar ahora
+      const playingNow = items.find(x => x.status === "playing");
+      if (playingNow) await updateDoc(doc(db, "queue", playingNow.id), { status: "done" });
+      await updateDoc(doc(db, "queue", btn.dataset.play), { status: "waiting", order: 0 });
+    });
+  });
+}
+
+document.getElementById("manualAdd").addEventListener("click", async () => {
+  const name = document.getElementById("manualName").value.trim() || "Admin";
+  const link = document.getElementById("manualLink").value.trim();
+  const videoId = extractVideoId(link);
+  if (!videoId) { alert("Link de YouTube no válido"); return; }
+  const title = (await getVideoTitle(videoId)) || "Video de YouTube";
+  await addDoc(collection(db, "queue"), {
+    name, videoId, title, status: "waiting", order: Date.now(),
+  });
+  document.getElementById("manualLink").value = "";
+});
+
+function escapeHtml(s) {
+  return String(s || "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pide tu canción</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif;
+    background: linear-gradient(160deg, #1a1a2e, #16213e); color: #fff; padding: 20px;
+  }
+  .card {
+    width: 100%; max-width: 420px; background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 28px;
+    backdrop-filter: blur(10px);
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p.sub { color: #aaa; margin: 0 0 24px; font-size: 14px; }
+  label { display: block; font-size: 13px; color: #ccc; margin: 16px 0 6px; }
+  input {
+    width: 100%; padding: 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(0,0,0,0.25); color: #fff; font-size: 16px;
+  }
+  input:focus { outline: 2px solid #6c5ce7; }
+  button {
+    width: 100%; margin-top: 22px; padding: 15px; border: none; border-radius: 12px;
+    background: #6c5ce7; color: #fff; font-size: 16px; font-weight: 600; cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; }
+  .msg { margin-top: 16px; padding: 12px; border-radius: 10px; font-size: 14px; text-align: center; }
+  .msg.ok { background: rgba(46, 213, 115, 0.15); color: #2ed573; }
+  .msg.err { background: rgba(255, 71, 87, 0.15); color: #ff4757; }
+  .preview { margin-top: 14px; display: flex; gap: 10px; align-items: center; }
+  .preview img { width: 80px; border-radius: 8px; }
+  .preview .t { font-size: 13px; color: #ddd; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>🎵 Pide tu canción</h1>
+    <p class="sub">Pon tu nombre y pega el link de YouTube</p>
+
+    <label for="name">Tu nombre</label>
+    <input id="name" type="text" placeholder="Ej: Marta" maxlength="30">
+
+    <label for="link">Link de YouTube</label>
+    <input id="link" type="text" placeholder="https://www.youtube.com/watch?v=...">
+
+    <div id="preview" class="preview hidden">
+      <img id="thumb" src="" alt="">
+      <div class="t" id="title"></div>
+    </div>
+
+    <button id="submit">Añadir a la cola</button>
+    <div id="msg"></div>
+  </div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+import { extractVideoId, getVideoTitle } from "./shared.js";
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const nameInput = document.getElementById("name");
+const linkInput = document.getElementById("link");
+const submitBtn = document.getElementById("submit");
+const msg = document.getElementById("msg");
+const preview = document.getElementById("preview");
+const thumb = document.getElementById("thumb");
+const titleEl = document.getElementById("title");
+
+// Recuerda el nombre en este dispositivo
+nameInput.value = localStorage.getItem("jukebox_name") || "";
+
+let currentVideoId = null;
+let debounceTimer = null;
+
+linkInput.addEventListener("input", () => {
+  clearTimeout(debounceTimer);
+  preview.classList.add("hidden");
+  currentVideoId = null;
+  debounceTimer = setTimeout(async () => {
+    const id = extractVideoId(linkInput.value);
+    if (!id) return;
+    currentVideoId = id;
+    thumb.src = `https://img.youtube.com/vi/${id}/mqdefault.jpg`;
+    const title = await getVideoTitle(id);
+    titleEl.textContent = title || "Video de YouTube";
+    preview.classList.remove("hidden");
+  }, 400);
+});
+
+submitBtn.addEventListener("click", async () => {
+  const name = nameInput.value.trim();
+  const link = linkInput.value.trim();
+  msg.innerHTML = "";
+
+  if (!name) {
+    msg.innerHTML = '<div class="msg err">Escribe tu nombre</div>';
+    return;
+  }
+  const videoId = currentVideoId || extractVideoId(link);
+  if (!videoId) {
+    msg.innerHTML = '<div class="msg err">Ese link de YouTube no es válido</div>';
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Añadiendo...";
+
+  try {
+    localStorage.setItem("jukebox_name", name);
+    const title = titleEl.textContent || "Video de YouTube";
+    await addDoc(collection(db, "queue"), {
+      name,
+      videoId,
+      title,
+      status: "waiting",
+      order: Date.now(),
+    });
+    msg.innerHTML = '<div class="msg ok">¡Añadida a la cola! 🎉</div>';
+    linkInput.value = "";
+    preview.classList.add("hidden");
+    currentVideoId = null;
+  } catch (e) {
+    console.error(e);
+    msg.innerHTML = '<div class="msg err">Error al añadir la canción. Intenta de nuevo.</div>';
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Añadir a la cola";
+  }
+});
+</script>
+</body>
+</html>

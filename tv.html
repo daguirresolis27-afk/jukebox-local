@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TV - Cola de música</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif; }
+  #player-wrap { position: fixed; inset: 0; }
+  #player { width: 100%; height: 100%; }
+  #idle {
+    position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: linear-gradient(160deg, #1a1a2e, #16213e); color: #fff; text-align: center;
+  }
+  #idle h1 { font-size: 42px; margin-bottom: 10px; }
+  #idle p { color: #aaa; font-size: 20px; margin-bottom: 30px; }
+  #idle img { border-radius: 16px; background: #fff; padding: 12px; }
+  .hidden { display: none !important; }
+  #sidebar {
+    position: fixed; top: 20px; right: 20px; width: 300px; max-height: 80vh; overflow-y: auto;
+    background: rgba(0,0,0,0.6); border-radius: 14px; padding: 16px; color: #fff; z-index: 10;
+  }
+  #sidebar h2 { font-size: 15px; margin: 0 0 10px; color: #ddd; }
+  #sidebar .item { padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 14px; }
+  #sidebar .item b { color: #6c5ce7; }
+  #qr-corner { position: fixed; bottom: 20px; right: 20px; background: #fff; padding: 8px; border-radius: 10px; z-index: 10; }
+  #qr-corner img { display: block; }
+  #qr-corner p { text-align: center; color: #000; font-size: 12px; margin: 4px 0 0; }
+</style>
+</head>
+<body>
+  <div id="idle">
+    <h1>🎶 ¡Pide tu música!</h1>
+    <p>Escanea el código y añade tu canción a la cola</p>
+    <img id="qr-big" width="260" height="260" alt="QR">
+  </div>
+
+  <div id="player-wrap" class="hidden">
+    <div id="player"></div>
+  </div>
+
+  <div id="sidebar" class="hidden">
+    <h2>En cola</h2>
+    <div id="queue-list"></div>
+  </div>
+
+  <div id="qr-corner" class="hidden">
+    <img id="qr-small" width="90" height="90" alt="QR">
+    <p>Pide tu canción</p>
+  </div>
+
+<script>
+  // URL pública de la página de pedidos (index.html). Ajusta si tu repo cuelga de una subcarpeta.
+  const REQUEST_URL = location.origin + location.pathname.replace(/tv\.html$/, "index.html");
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(REQUEST_URL)}`;
+  document.getElementById("qr-big").src = qrUrl;
+  document.getElementById("qr-small").src = qrUrl.replace("300x300", "150x150");
+</script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getFirestore, collection, query, where, orderBy, limit,
+  onSnapshot, doc, updateDoc
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const idleEl = document.getElementById("idle");
+const playerWrap = document.getElementById("player-wrap");
+const sidebar = document.getElementById("sidebar");
+const qrCorner = document.getElementById("qr-corner");
+const queueListEl = document.getElementById("queue-list");
+
+let ytPlayer = null;
+let ytReady = false;
+let currentPlayingId = null; // doc id actualmente en reproducción
+let currentVideoId = null;
+let pendingQueue = []; // snapshot de docs waiting/playing, ordenados
+
+// --- Carga la API de YouTube IFrame ---
+const tag = document.createElement("script");
+tag.src = "https://www.youtube.com/iframe_api";
+document.head.appendChild(tag);
+
+window.onYouTubeIframeAPIReady = function () {
+  ytReady = true;
+  tryStartNext();
+};
+
+function showIdle() {
+  idleEl.classList.remove("hidden");
+  playerWrap.classList.add("hidden");
+  sidebar.classList.add("hidden");
+  qrCorner.classList.add("hidden");
+}
+
+function showPlaying() {
+  idleEl.classList.add("hidden");
+  playerWrap.classList.remove("hidden");
+  sidebar.classList.remove("hidden");
+  qrCorner.classList.remove("hidden");
+}
+
+function renderSidebar() {
+  const upcoming = pendingQueue.filter(d => d.id !== currentPlayingId);
+  queueListEl.innerHTML = upcoming.length
+    ? upcoming.map(d => `<div class="item"><b>${escapeHtml(d.name)}</b><br>${escapeHtml(d.title || d.videoId)}</div>`).join("")
+    : '<div class="item">No hay nadie en espera</div>';
+}
+
+function escapeHtml(s) {
+  return String(s || "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+
+async function markStatus(docId, status) {
+  try {
+    await updateDoc(doc(db, "queue", docId), { status });
+  } catch (e) {
+    console.error("No se pudo actualizar estado", e);
+  }
+}
+
+function tryStartNext() {
+  if (!ytReady) return;
+  if (currentPlayingId) return; // ya hay algo sonando
+
+  const next = pendingQueue.find(d => d.status === "waiting");
+  if (!next) {
+    if (pendingQueue.length === 0) showIdle();
+    return;
+  }
+
+  currentPlayingId = next.id;
+  currentVideoId = next.videoId;
+  markStatus(next.id, "playing");
+  showPlaying();
+  renderSidebar();
+
+  if (ytPlayer) {
+    ytPlayer.loadVideoById(next.videoId);
+  } else {
+    ytPlayer = new YT.Player("player", {
+      videoId: next.videoId,
+      playerVars: { autoplay: 1, controls: 0, rel: 0, modestbranding: 1, playsinline: 1 },
+      events: {
+        onStateChange: onPlayerStateChange,
+        onReady: () => ytPlayer.playVideo(),
+      },
+    });
+  }
+}
+
+function onPlayerStateChange(event) {
+  if (event.data === YT.PlayerState.ENDED) {
+    const finished = currentPlayingId;
+    currentPlayingId = null;
+    currentVideoId = null;
+    if (finished) markStatus(finished, "done");
+    tryStartNext();
+  }
+}
+
+// Escucha en tiempo real la cola (waiting + playing), ordenada por llegada
+const q = query(
+  collection(db, "queue"),
+  where("status", "in", ["waiting", "playing"]),
+  orderBy("order", "asc"),
+  limit(50)
+);
+
+onSnapshot(q, (snap) => {
+  pendingQueue = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  // Si lo que estaba sonando ya no está en la lista (lo borraron desde admin), reinicia
+  if (currentPlayingId && !pendingQueue.some(d => d.id === currentPlayingId)) {
+    currentPlayingId = null;
+    currentVideoId = null;
+    if (ytPlayer) ytPlayer.stopVideo();
+  }
+
+  renderSidebar();
+  tryStartNext();
+
+  if (pendingQueue.length === 0 && !currentPlayingId) showIdle();
+}, (err) => {
+  console.error("Error escuchando la cola", err);
+});
+</script>
+</body>
+</html>

@@ -24,7 +24,7 @@
   .hidden { display: none !important; }
 
   #sidebar {
-    position: fixed; top: 0; right: 0; bottom: 92px; width: 320px;
+    position: fixed; top: 0; right: 0; bottom: 110px; width: 320px;
     background: linear-gradient(to left, rgba(0,0,0,0.85), rgba(0,0,0,0.55) 80%, transparent);
     padding: 24px 20px; color: #fff; z-index: 10; overflow-y: auto;
   }
@@ -34,53 +34,30 @@
   #sidebar .item span { color: #aaa; font-size: 13px; }
   #sidebar .now b { color: #2ed573; }
 
-  /* --- Banner promocional + QR (esquina inferior izquierda) --- */
-  #promo-card {
-    position: fixed; bottom: 110px; left: 16px; z-index: 20;
-    display: flex; align-items: stretch; border-radius: 18px; overflow: hidden;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 3px solid #ffd166;
-  }
-  #promo-card .qr-part {
-    background: #fff; padding: 10px; display: flex; align-items: center; justify-content: center;
-  }
-  #promo-card .text-part {
-    position: relative; overflow: hidden; padding: 14px 22px;
-    background: linear-gradient(135deg, #8a0000 0%, #d2001f 45%, #ff7a00 100%);
-    display: flex; flex-direction: column; justify-content: center; min-width: 220px;
-  }
-  #promo-card .text-part .emoji-bg {
-    position: absolute; inset: 0; font-size: 46px; opacity: 0.16;
-    display: flex; flex-wrap: wrap; align-content: center; justify-content: space-around;
-    transform: rotate(-8deg); pointer-events: none; line-height: 1;
-  }
-  #promo-card .brand {
-    position: relative; font-family: "Poppins", sans-serif; font-size: 13px; font-weight: 800; letter-spacing: 0.08em;
-    color: #ffd166; text-transform: uppercase; margin-bottom: 4px;
-  }
-  #promo-card .headline {
-    position: relative; font-family: "Bebas Neue", sans-serif; font-size: 26px; font-weight: 400; color: #fff; line-height: 1.05;
-    letter-spacing: 0.03em; text-transform: uppercase; text-shadow: 0 2px 4px rgba(0,0,0,0.4);
-  }
-  #promo-card .subline {
-    position: relative; font-family: "Poppins", sans-serif; font-size: 12px; color: #ffe8c2; margin-top: 6px; font-weight: 600;
-  }
-
-  /* --- Barra inferior de ancho completo --- */
+  /* --- Barra inferior de ancho completo (con QR incluido) --- */
   #bottom-bar {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
-    height: 92px; display: flex; align-items: center; justify-content: center; gap: 18px;
+    height: 110px; display: flex; align-items: center; gap: 18px;
     background: linear-gradient(90deg, #7a0000 0%, #d2001f 50%, #ff7a00 100%);
     box-shadow: 0 -6px 24px rgba(0,0,0,0.5); border-top: 3px solid #ffd166;
     padding: 0 30px;
   }
+  #bottom-bar .bb-qr {
+    background: #fff; padding: 6px; border-radius: 10px; flex-shrink: 0; display: flex;
+  }
+  #bottom-bar .bb-qr img { display: block; width: 84px; height: 84px; }
   #bottom-bar .bb-brand {
     font-family: "Poppins", sans-serif; font-weight: 800; font-size: 20px; color: #ffd166;
     text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;
   }
-  #bottom-bar .bb-sep { width: 3px; height: 44px; background: rgba(255,255,255,0.35); border-radius: 2px; }
+  #bottom-bar .bb-sep { width: 3px; height: 44px; background: rgba(255,255,255,0.35); border-radius: 2px; flex-shrink: 0; }
+  #bottom-bar .bb-msg-wrap { display: flex; flex-direction: column; }
   #bottom-bar .bb-msg {
-    font-family: "Bebas Neue", sans-serif; font-size: 44px; color: #fff; letter-spacing: 0.04em;
-    text-transform: uppercase; text-shadow: 0 3px 6px rgba(0,0,0,0.45); white-space: nowrap;
+    font-family: "Bebas Neue", sans-serif; font-size: 40px; color: #fff; letter-spacing: 0.04em;
+    text-transform: uppercase; text-shadow: 0 3px 6px rgba(0,0,0,0.45); white-space: nowrap; line-height: 1;
+  }
+  #bottom-bar .bb-sub {
+    font-family: "Poppins", sans-serif; font-size: 12px; color: #ffe8c2; font-weight: 600; margin-top: 4px;
   }
 
   #fallback-banner {
@@ -108,22 +85,16 @@
     <div id="queue-list"></div>
   </div>
 
-  <div id="promo-card" class="hidden">
-    <div class="qr-part">
-      <img id="qr-small-right" width="90" height="90" alt="QR">
-    </div>
-    <div class="text-part">
-      <div class="emoji-bg">🍗🍔🍟🍗🍔🍟🍗🍔</div>
-      <div class="brand">El Pechugón</div>
-      <div class="headline">¡ESCOGE TU MÚSICA!</div>
-      <div class="subline">Escanea el QR y pide tu canción 🎶</div>
-    </div>
-  </div>
-
   <div id="bottom-bar">
+    <div class="bb-qr">
+      <img id="qr-small-right" width="84" height="84" alt="QR">
+    </div>
     <div class="bb-brand">El Pechugón</div>
     <div class="bb-sep"></div>
-    <div class="bb-msg">¡ESCOGE TU MÚSICA!</div>
+    <div class="bb-msg-wrap">
+      <div class="bb-msg">¡ESCOGE TU MÚSICA!</div>
+      <div class="bb-sub">Escanea el QR y pide tu canción 🎶</div>
+    </div>
   </div>
 
 <script>
@@ -149,7 +120,6 @@ const db = getFirestore(app);
 const idleEl = document.getElementById("idle");
 const playerWrap = document.getElementById("player-wrap");
 const sidebar = document.getElementById("sidebar");
-const promoCard = document.getElementById("promo-card");
 const fallbackBanner = document.getElementById("fallback-banner");
 const queueListEl = document.getElementById("queue-list");
 
@@ -188,7 +158,6 @@ function showRealScreen() {
   idleEl.classList.add("hidden");
   playerWrap.classList.remove("hidden");
   sidebar.classList.remove("hidden");
-  promoCard.classList.remove("hidden");
   fallbackBanner.classList.add("hidden");
 }
 
@@ -196,7 +165,6 @@ function showFallbackScreen() {
   idleEl.classList.add("hidden");
   playerWrap.classList.remove("hidden");
   sidebar.classList.remove("hidden");
-  promoCard.classList.remove("hidden");
   fallbackBanner.classList.remove("hidden");
 }
 
@@ -205,7 +173,6 @@ function showEmptyIdle() {
   idleEl.classList.remove("hidden");
   playerWrap.classList.add("hidden");
   sidebar.classList.add("hidden");
-  promoCard.classList.add("hidden");
   fallbackBanner.classList.add("hidden");
 }
 

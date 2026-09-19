@@ -34,16 +34,9 @@
   #sidebar .item span { color: #aaa; font-size: 13px; }
   #sidebar .now b { color: #2ed573; }
 
-  .qr-corner {
-    position: fixed; bottom: 110px; background: rgba(255,255,255,0.95); padding: 8px; border-radius: 10px; z-index: 20;
-  }
-  .qr-corner.left { left: 16px; }
-  .qr-corner img { display: block; }
-  .qr-corner p { text-align: center; color: #000; font-size: 11px; margin: 4px 0 0; font-weight: 600; }
-
-  /* --- Banner promocional + QR (esquina derecha) --- */
+  /* --- Banner promocional + QR (esquina inferior izquierda) --- */
   #promo-card {
-    position: fixed; bottom: 110px; right: 16px; z-index: 20;
+    position: fixed; bottom: 110px; left: 16px; z-index: 20;
     display: flex; align-items: stretch; border-radius: 18px; overflow: hidden;
     box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 3px solid #ffd166;
   }
@@ -115,11 +108,6 @@
     <div id="queue-list"></div>
   </div>
 
-  <div id="qr-left" class="qr-corner hidden">
-    <img id="qr-small-left" width="90" height="90" alt="QR">
-    <p>Pide tu canción</p>
-  </div>
-
   <div id="promo-card" class="hidden">
     <div class="qr-part">
       <img id="qr-small-right" width="90" height="90" alt="QR">
@@ -143,7 +131,6 @@
   const REQUEST_URL = location.origin + location.pathname.replace(/tv\.html$/, "index.html");
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(REQUEST_URL)}`;
   document.getElementById("qr-big").src = qrUrl;
-  document.getElementById("qr-small-left").src = qrUrl.replace("300x300", "150x150");
   document.getElementById("qr-small-right").src = qrUrl.replace("300x300", "150x150");
 </script>
 
@@ -162,7 +149,6 @@ const db = getFirestore(app);
 const idleEl = document.getElementById("idle");
 const playerWrap = document.getElementById("player-wrap");
 const sidebar = document.getElementById("sidebar");
-const qrLeft = document.getElementById("qr-left");
 const promoCard = document.getElementById("promo-card");
 const fallbackBanner = document.getElementById("fallback-banner");
 const queueListEl = document.getElementById("queue-list");
@@ -202,7 +188,6 @@ function showRealScreen() {
   idleEl.classList.add("hidden");
   playerWrap.classList.remove("hidden");
   sidebar.classList.remove("hidden");
-  qrLeft.classList.remove("hidden");
   promoCard.classList.remove("hidden");
   fallbackBanner.classList.add("hidden");
 }
@@ -211,7 +196,6 @@ function showFallbackScreen() {
   idleEl.classList.add("hidden");
   playerWrap.classList.remove("hidden");
   sidebar.classList.remove("hidden");
-  qrLeft.classList.remove("hidden");
   promoCard.classList.remove("hidden");
   fallbackBanner.classList.remove("hidden");
 }
@@ -221,7 +205,6 @@ function showEmptyIdle() {
   idleEl.classList.remove("hidden");
   playerWrap.classList.add("hidden");
   sidebar.classList.add("hidden");
-  qrLeft.classList.add("hidden");
   promoCard.classList.add("hidden");
   fallbackBanner.classList.add("hidden");
 }
